@@ -1,0 +1,5 @@
+github-hook-perl is a basic webhook receiver for github.
+
+I wrote this in order to send by mail every push made to the
+Backup Manager repository to the commits-list.
+
