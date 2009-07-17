@@ -4,17 +4,17 @@ use strict;
 use warnings;
 use CGI;
 use JSON;
-use Data::Dumper;
-
+use YAML;
 use Email::Send;
 
 use constant HAPPY_MESSAGE => 'Hello there, thanks for passing by!';
 use constant UNHAPPY_MESSAGE => 'You go away nasty web monster!';
 use constant FAILED_MESSAGE => 'Ooops, I failed sending an email to teh w0rld';
+use constant NO_CONFIG_MESSAGE => "Yeeerk, I don't know that repository!";
 
-my $sender = 'sukria+github-webhook@sukria.net';
-my $recipient = 'sukria@sukria.net';
-my $smtp_host = 'private.sukria.net';
+my $conffile = '/etc/github-hook-perl.conf';
+my $config = YAML::LoadFile($conffile) or die $!;
+die "No configuration found" unless $config;
 
 my $version = '0.1';
 
@@ -36,6 +36,13 @@ my $json = from_json($payload);
 my $repo = $json->{repository};
 my $commits = $json->{commits};
 
+# Read the configuration for that repo
+my $repo_config = $config->{$repo->{name}};
+if (not defined $repo_config) {
+    print NO_CONFIG_MESSAGE;
+    exit 0;
+}
+
 my $subject = "New push submitted to ".$repo->{name}." (".~~@{$commits}." commits)";
 my $footer  = "-- \n"
             . $repo->{name}." repository (".$repo->{owner}{name}.")\n"
@@ -55,6 +62,9 @@ my $content = "$subject\n"
             . "$commits_str"
             . "$footer\n";
 
+my $recipient = $repo_config->{recipient};
+my $sender    = $repo_config->{sender};
+
 my $message = "To:  $recipient\n"
             . "From: $sender\n"
             . "X-Mailer: github-webhook-perl $version\n"
@@ -63,7 +73,7 @@ my $message = "To:  $recipient\n"
             . $content;
 
 my $email = Email::Send->new({mailer => 'SMTP'});
-$email->mailer_args([Host => $smtp_host]);
+$email->mailer_args([Host => $config->{smtp_host}]);
 if($email->send($message)) {
     print HAPPY_MESSAGE;
 }
