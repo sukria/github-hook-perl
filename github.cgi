@@ -18,65 +18,62 @@ die "No configuration found" unless $config;
 
 my $version = '0.1';
 
-my $cgi = CGI->new;
-print $cgi->header('text/plain');
+get {regexp => '.*'} => sub { UNHAPPY_MESSAGE };
 
-unless ($cgi->request_method eq 'POST') {
-    print UNHAPPY_MESSAGE;
-    exit 0;
-}
+post '/github/hook/:project' 
+=> sub {
+    my $params = shift;
+    my $payload = $params->{'payload'};
 
-my $payload = $cgi->param('payload');
-unless (defined $payload) {
-    print UNHAPPY_MESSAGE;
-    exit 0;
-}
+    return UNHAPPY_MESSAGE unless (defined $payload);
 
-my $json = from_json($payload);
-my $repo = $json->{repository};
-my $commits = $json->{commits};
+    my $json = from_json($payload);
+    my $repo = $json->{repository};
+    my $commits = $json->{commits};
 
-# Read the configuration for that repo
-my $repo_config = $config->{$repo->{name}};
-if (not defined $repo_config) {
-    print NO_CONFIG_MESSAGE;
-    exit 0;
-}
+    # Read the configuration for that repo
+    my $repo_config = $config->{$repo->{name}};
+    if (not defined $repo_config) {
+        print NO_CONFIG_MESSAGE;
+        exit 0;
+    }
 
-my $subject = "New push submitted to ".$repo->{name}." (".~~@{$commits}." commits)";
-my $footer  = "-- \n"
-            . $repo->{name}." repository (".$repo->{owner}{name}.")\n"
-            . $repo->{url}."\n\n";
+    my $subject = "New push submitted to ".$repo->{name}." (".~~@{$commits}." commits)";
+    my $footer  = "-- \n"
+                . $repo->{name}." repository (".$repo->{owner}{name}.")\n"
+                . $repo->{url}."\n\n";
 
-my $commits_str = "";
-foreach my $c (@$commits) {
-    $commits_str .= "\n";
-    $commits_str .= $c->{timestamp}.' - '.$c->{author}{name}."\n\n";
-    $commits_str .= "  * ".$c->{message}."\n\n";
-    $commits_str .= $c->{url}."\n\n";
-}   
+    my $commits_str = "";
+    foreach my $c (@$commits) {
+        $commits_str .= "\n";
+        $commits_str .= $c->{timestamp}.' - '.$c->{author}{name}."\n\n";
+        $commits_str .= "  * ".$c->{message}."\n\n";
+        $commits_str .= $c->{url}."\n\n";
+    }   
 
-my $content = "$subject\n"
-            . '-' x 79 
-            . "\n"
-            . "$commits_str"
-            . "$footer\n";
+    my $content = "$subject\n"
+                . '-' x 79 
+                . "\n"
+                . "$commits_str"
+                . "$footer\n";
 
-my $recipient = $repo_config->{recipient};
-my $sender    = $repo_config->{sender};
+    my $recipient = $repo_config->{recipient};
+    my $sender    = $repo_config->{sender};
 
-my $message = "To:  $recipient\n"
-            . "From: $sender\n"
-            . "X-Mailer: github-webhook-perl $version\n"
-            . "X-github-project: ".$repo->{name}."\n"
-            . "Subject: $subject\n\n"
-            . $content;
+    my $message = "To:  $recipient\n"
+                . "From: $sender\n"
+                . "X-Mailer: github-webhook-perl $version\n"
+                . "X-github-project: ".$repo->{name}."\n"
+                . "Subject: $subject\n\n"
+                . $content;
 
-my $email = Email::Send->new({mailer => 'SMTP'});
-$email->mailer_args([Host => $config->{smtp_host}]);
-if($email->send($message)) {
-    print HAPPY_MESSAGE;
-}
-else { 
-    print FAILED_MESSAGE;
-}
+    my $email = Email::Send->new({mailer => 'SMTP'});
+    $email->mailer_args([Host => $config->{smtp_host}]);
+    if($email->send($message)) {
+        return HAPPY_MESSAGE;
+    }
+    else { 
+        return FAILED_MESSAGE;
+    }
+};
+
