@@ -2,6 +2,7 @@
 
 use strict;
 use warnings;
+use Dancer;
 use CGI;
 use JSON;
 use YAML;
@@ -77,3 +78,4 @@ post '/github/hook/:project'
     }
 };
 
+Dancer->dance;
