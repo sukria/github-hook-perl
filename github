@@ -2,6 +2,7 @@
 
 use strict;
 use warnings;
+use Template;
 use Dancer;
 use CGI;
 use JSON;
@@ -52,7 +53,7 @@ post '/hook/:project' => sub {
     my $tokens = {
         subject    => "New push submitted to ".$repo->{name},
         repository => $repo,
-        commits    => $commits,
+        commits    => [reverse(@$commits)],
         nb_commits => (scalar(@$commits)),
         recipient  => $repo_config->{recipient},
         sender     => $repo_config->{sender},

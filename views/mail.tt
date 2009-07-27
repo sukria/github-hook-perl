@@ -1,8 +1,10 @@
 New push submitted to <% repository.name %> (<% nb_commits %> commits)
 
 <% foreach commit in commits %>
-<% commit.timestamp %> - <% commit.author %>
+<% commit.timestamp %> - <% commit.author.name %>
+
     * <% commit.message %>
+
 <% commit.url %>
 <% end %>
 -- 

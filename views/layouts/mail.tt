@@ -1,5 +1,5 @@
 To: <% recipient %>
-From: <% sneder %>
+From: <% sender %>
 X-Mailer: github-webhook-perl <% version %>
 X-github-project: <% params.project %>
 Subject: <% subject %>
