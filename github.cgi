@@ -5,29 +5,38 @@ use warnings;
 use Dancer;
 use CGI;
 use JSON;
-use YAML;
 use Email::Send;
 
-use constant HAPPY_MESSAGE => 'Hello there, thanks for passing by!';
-use constant UNHAPPY_MESSAGE => 'You go away nasty web monster!';
-use constant FAILED_MESSAGE => 'Ooops, I failed sending an email to teh w0rld';
-use constant NO_CONFIG_MESSAGE => "Yeeerk, I don't know that repository!";
-
-my $conffile = '/etc/github-hook-perl.conf';
-my $config = YAML::LoadFile($conffile) or die $!;
-die "No configuration found" unless $config;
-
+# init
 my $version = '0.1';
+my $config = {
+    smtp_host => 'localhost',
+};
 
-get {regexp => '.*'} => sub { UNHAPPY_MESSAGE };
+set content_type 'text/plain';
 
-post '/github/hook/:project' 
-=> sub {
-    my $params = shift;
-    my $payload = $params->{'payload'};
+# all GET requests are droped
+get r('.*') => sub { 
+    status 'forbidden'; 
+    "You go away nasty web monster\n"; 
+};
 
-    return UNHAPPY_MESSAGE unless (defined $payload);
+# POST hook-receiver per project
+post '/hook/:project' => sub {
 
+    if (not defined $config->{params->{project}}) {
+        status 'not_found';
+        return "No such project: ".params->{project}."\n";
+    }
+
+    # payload is mandatory
+    my $payload = params->{'payload'};
+    if (not defined $payload) {
+        status '404';
+        return "Hmm, no payload in your backpack dude\n";
+    }
+
+    # inspect the data submitted
     my $json = from_json($payload);
     my $repo = $json->{repository};
     my $commits = $json->{commits};
@@ -39,42 +48,29 @@ post '/github/hook/:project'
         exit 0;
     }
 
-    my $subject = "New push submitted to ".$repo->{name}." (".~~@{$commits}." commits)";
-    my $footer  = "-- \n"
-                . $repo->{name}." repository (".$repo->{owner}{name}.")\n"
-                . $repo->{url}."\n\n";
+    # Render the email content
+    my $tokens = {
+        subject    => "New push submitted to ".$repo->{name},
+        repository => $repo,
+        commits    => $commits,
+        nb_commits => (scalar(@$commits)),
+        recipient  => $repo_config->{recipient},
+        sender     => $repo_config->{sender},
+        version    => $version,
+    };
 
-    my $commits_str = "";
-    foreach my $c (@$commits) {
-        $commits_str .= "\n";
-        $commits_str .= $c->{timestamp}.' - '.$c->{author}{name}."\n\n";
-        $commits_str .= "  * ".$c->{message}."\n\n";
-        $commits_str .= $c->{url}."\n\n";
-    }   
-
-    my $content = "$subject\n"
-                . '-' x 79 
-                . "\n"
-                . "$commits_str"
-                . "$footer\n";
-
-    my $recipient = $repo_config->{recipient};
-    my $sender    = $repo_config->{sender};
-
-    my $message = "To:  $recipient\n"
-                . "From: $sender\n"
-                . "X-Mailer: github-webhook-perl $version\n"
-                . "X-github-project: ".$repo->{name}."\n"
-                . "Subject: $subject\n\n"
-                . $content;
+    layout 'mail';
+    my $message = template('mail', $tokens);
 
     my $email = Email::Send->new({mailer => 'SMTP'});
     $email->mailer_args([Host => $config->{smtp_host}]);
     if($email->send($message)) {
-        return HAPPY_MESSAGE;
+        status 'ok';
+        return $message;
     }
     else { 
-        return FAILED_MESSAGE;
+        status 'error';
+        return "unable to send the mail : $!";
     }
 };
 
