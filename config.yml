@@ -1,0 +1,3 @@
+content_type: 'text/plain'
+queue_file: "/tmp/github-notifications.log"
+prefix: '#dancer:'
